@@ -14,5 +14,4 @@ __pycache__/
 temp_data/
 
 # Ignore virtual environments
-E:/INMAV/Trading/Algorithmic Devp/Quantitative_Investment/llm_manager
-.env
+llm_manager/.env
