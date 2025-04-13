@@ -1,132 +1,160 @@
-# main.py
+# mixgo/main.py
 import asyncio
-import argparse
-import yaml
-from datetime import datetime
-from dotenv import load_dotenv
 import os
+import argparse
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
-from trading_system.mixgo import MixGoAgent
-from trading_system.stanley_drucken import StanleyDruckenmillerAgent
-from trading_system.charlie_munger import CharlieMungerAgent
+from trading_system.bill_ackman import BillAckmanAgent
+from trading_system.michael_burry import MichaelBurryAgent
 from trading_system.technical_analyst import TechnicalAnalystAgent
-from signals.data.fetcher import DataFetcher
-from signals.brokers.ig_index import IGIndexBroker
+from trading_system.mixgo import MixGoAgent
+from signals.brokers.alpaca import AlpacaBroker
 from signals.brokers.mock import MockBroker
+from signals.data.fetcher import DataFetcher
 from signals.llm.client import LLMClient
-from signals.utils.config import Config
-from signals.utils.display import print_trading_output
 from signals.utils.progress import progress
 
 # Load environment variables
 load_dotenv()
 
-async def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="MixGo Trading System")
-    parser.add_argument("--config", type=str, default="config.yaml", help="Path to config file")
-    parser.add_argument("--tickers", type=str, help="Comma-separated list of tickers to trade")
-    parser.add_argument("--model", type=str, help="LLM model to use")
-    parser.add_argument("--provider", type=str, help="LLM provider")
-    parser.add_argument("--mock", action="store_true", help="Use mock broker for testing")
-    parser.add_argument("--backtest", action="store_true", help="Run in backtest mode")
-    args = parser.parse_args()
-    
-    # Load configuration
-    config = Config(args.config)
-    
-    # Override config with command-line arguments if provided
-    if args.tickers:
-        config.tickers = args.tickers.split(",")
-    if args.model:
-        config.llm.model = args.model
-    if args.provider:
-        config.llm.provider = args.provider
-    
+async def run_mixgo(args):
+    """Run the MixGo trading system."""
     # Initialize progress tracking
-    progress.start()
+    progress.update_status("mixgo", None, "Initializing")
     
-    try:
-        # Initialize components
-        data_fetcher = DataFetcher()
+    # Parse tickers
+    tickers = args.tickers.split(",") if args.tickers else ["AAPL", "MSFT", "GOOGL"]
+    
+    # Set dates
+    end_date = args.end_date or datetime.now().strftime("%Y-%m-%d")
+    if not args.start_date:
+        start_date = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d")
+    else:
+        start_date = args.start_date
+    
+    # Initialize components
+    data_fetcher = DataFetcher(use_cache=True)
+    
+    # Initialize broker
+    if args.mock:
+        broker = MockBroker()
+    else:
+        broker = AlpacaBroker()
+    
+    # Connect to broker
+    if args.mock:
+        await broker.connect({})
+    else:
+        await broker.connect({
+            "api_key": os.getenv("ALPACA_API_KEY"),
+            "api_secret": os.getenv("ALPACA_API_SECRET"),
+            "base_url": os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+        })
+    
+    # Get account info and positions
+    account_info = await broker.get_account_info()
+    positions = await broker.get_positions()
+    
+    # Create portfolio dictionary
+    portfolio = {
+        "cash": float(account_info["cash"]),
+        "margin_requirement": 0.5,  # 50% margin requirement
+        "margin_used": 0.0,
+        "positions": {}
+    }
+    
+    # Initialize positions
+    for position in positions:
+        ticker = position.ticker
+        direction = position.direction
+        quantity = position.quantity
+        average_price = position.average_price
         
-        # Initialize LLM client
-        llm_client = LLMClient(
-            model_name=config.llm.model,
-            model_provider=config.llm.provider
-        )
-        
-        # Initialize broker
-        if args.mock or args.backtest:
-            broker = MockBroker()
-        else:
-            broker = IGIndexBroker()
-            await broker.connect({
-                "api_key": os.getenv("IG_API_KEY"),
-                "account_id": os.getenv("IG_ACCOUNT_ID"),
-                "password": os.getenv("IG_PASSWORD")
-            })
-        
-        # Initialize agents
-        druckenmiller_agent = StanleyDruckenmillerAgent()
-        munger_agent = CharlieMungerAgent()
-        technical_agent = TechnicalAnalystAgent()
-        
-        # Initialize MixGo agent
-        mixgo_agent = MixGoAgent(
-            llm_client=llm_client,
-            agents=[druckenmiller_agent, munger_agent, technical_agent]
-        )
-        
-        # Set dates for analysis
-        end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.strptime(end_date, "%Y-%m-%d") - \
-                     datetime.timedelta(days=config.analysis.lookback_days)).strftime("%Y-%m-%d")
-        
-        # Get current portfolio state
-        account_info = await broker.get_account_info()
-        positions = await broker.get_positions()
-        
-        # Create portfolio object
-        portfolio = {
-            "cash": account_info.get("available"),
-            "positions": {
-                p.ticker: {
-                    "direction": p.direction,
-                    "quantity": p.quantity,
-                    "average_price": p.average_price
-                } for p in positions
+        if ticker not in portfolio["positions"]:
+            portfolio["positions"][ticker] = {
+                "long": 0,
+                "short": 0,
+                "long_cost_basis": 0.0,
+                "short_cost_basis": 0.0,
+                "short_margin_used": 0.0
             }
-        }
         
-        # Run the MixGo agent
-        results = await mixgo_agent.analyze(
-            tickers=config.tickers,
-            data_fetcher=data_fetcher,
-            portfolio=portfolio,
-            end_date=end_date,
-            start_date=start_date
-        )
-        
-        # Display results
-        print_trading_output(results)
-        
-        # If not in backtest mode, execute trades
-        if not args.backtest:
-            for ticker, decision in results.items():
-                if decision.action in ["buy", "sell", "short", "cover"] and decision.quantity > 0:
+        if direction == "long":
+            portfolio["positions"][ticker]["long"] = quantity
+            portfolio["positions"][ticker]["long_cost_basis"] = average_price
+        else:  # short
+            portfolio["positions"][ticker]["short"] = quantity
+            portfolio["positions"][ticker]["short_cost_basis"] = average_price
+            # Calculate margin used (50% of position value)
+            margin = quantity * average_price * 0.5
+            portfolio["positions"][ticker]["short_margin_used"] = margin
+            portfolio["margin_used"] += margin
+    
+    # Create agents
+    ackman_agent = BillAckmanAgent()
+    burry_agent = MichaelBurryAgent()
+    technical_agent = TechnicalAnalystAgent()
+    
+    # Create LLM client
+    llm_client = LLMClient(
+        model_name=args.model or "gpt-4o",
+        model_provider=args.provider or "OpenAI"
+    )
+    
+    # Create MixGo agent
+    mixgo_agent = MixGoAgent(
+        llm_client=llm_client,
+        agents=[ackman_agent, burry_agent, technical_agent]
+    )
+    
+    # Run analysis
+    progress.update_status("mixgo", None, "Running analysis")
+    decisions = await mixgo_agent.analyze(
+        tickers=tickers,
+        data_fetcher=data_fetcher,
+        portfolio=portfolio,
+        end_date=end_date,
+        start_date=start_date
+    )
+    
+    # Display results
+    print("\n\n===== TRADING DECISIONS =====")
+    for ticker, decision in decisions.items():
+        print(f"\n{ticker}:")
+        print(f"  Action: {decision.action.upper()}")
+        print(f"  Quantity: {decision.quantity}")
+        print(f"  Confidence: {decision.confidence:.1f}%")
+        print(f"  Reasoning: {decision.reasoning[:200]}..." if len(decision.reasoning) > 200 else f"  Reasoning: {decision.reasoning}")
+    
+    # Execute trades if not in dry run mode
+    if not args.dry_run and not args.mock:
+        print("\n\n===== EXECUTING TRADES =====")
+        for ticker, decision in decisions.items():
+            if decision.action != "hold" and decision.quantity > 0:
+                try:
                     print(f"Executing {decision.action} order for {decision.quantity} shares of {ticker}...")
-                    order_status = await broker.place_order(
+                    order = await broker.place_order(
                         ticker=ticker,
                         direction=decision.action,
                         quantity=decision.quantity,
                         order_type="market"
                     )
-                    print(f"Order status: {order_status.model_dump()}")
-    
-    finally:
-        # Stop progress tracking
-        progress.stop()
+                    print(f"Order placed: {order.order_id} - Status: {order.status}")
+                except Exception as e:
+                    print(f"Error executing trade: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="MixGo Trading System")
+    parser.add_argument("--tickers", type=str, help="Comma-separated list of tickers to trade")
+    parser.add_argument("--start-date", type=str, help="Start date for analysis (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, help="End date for analysis (YYYY-MM-DD)")
+    parser.add_argument("--mock", action="store_true", help="Use mock broker for testing")
+    parser.add_argument("--dry-run", action="store_true", help="Don't execute trades, just analyze")
+    parser.add_argument("--model", type=str, help="LLM model to use")
+    parser.add_argument("--provider", type=str, help="LLM provider (OpenAI or Anthropic)")
+    
+    args = parser.parse_args()
+    
+    # Run the application
+    asyncio.run(run_mixgo(args))

@@ -1,27 +1,7 @@
-# brokers/base.py
+# mixgo/brokers/base.py
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
-from pydantic import BaseModel
-
-class OrderStatus(BaseModel):
-    """Order status model."""
-    order_id: str
-    ticker: str
-    direction: str
-    quantity: int
-    price: float
-    status: str
-    timestamp: str
-
-class Position(BaseModel):
-    """Position information model."""
-    ticker: str
-    direction: str  # "long" or "short"
-    quantity: int
-    average_price: float
-    current_price: float
-    profit_loss: float
-    profit_loss_pct: float
+from signals.data.models import Position, OrderStatus
 
 class Broker(ABC):
     """Abstract broker interface defining common operations."""

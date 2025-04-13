@@ -1,7 +1,5 @@
-# llm/client.py
 from typing import Any, Dict, Type, TypeVar
 from pydantic import BaseModel
-from llm.models import get_model, ModelProvider
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -18,7 +16,6 @@ class LLMClient:
         """
         self.model_name = model_name
         self.model_provider = model_provider
-        self.llm = get_model(model_name, model_provider)
     
     async def generate_decision(
         self, 
@@ -37,22 +34,22 @@ class LLMClient:
         Returns:
             Instance of the output model
         """
+        # Import here to avoid circular imports
+        from utils.llm import call_llm
+        
         # Format the prompt with context info
         user_prompt = (
             f"Please analyze the following trading signals and make a decision for {context['ticker']}.\n\n"
             f"Signals: {context['signals']}\n\n"
             f"Current Position: {context['position']}\n\n"
+            f"Current Price: ${context['price']:,.2f}\n\n"
             f"Available Cash: ${context['cash']:,.2f}\n\n"
             f"Portfolio Context: {context['portfolio_context']}\n\n"
             f"Generate a trading decision with action, quantity, confidence, and reasoning."
         )
         
-        # Use with_structured_output for supported models
-        structured_llm = self.llm.with_structured_output(output_model)
-        
-        # Invoke the LLM with retry logic
-        from utils.llm import call_llm
-        return call_llm(
+        # Call the LLM with retry logic
+        return await call_llm(
             prompt=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}

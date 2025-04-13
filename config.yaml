@@ -1,32 +1,30 @@
+# mixgo/config.yaml
 analysis:
-  lookback_days: 30
+  default_lookback_days: 30
   
 llm:
-  model: "llama-3.3-70b-versatile"
-  provider: "Grop"
+  model: "gpt-4o"
+  provider: "OpenAI"
   
 broker:
-  name: "ig_index"
+  name: "alpaca"
+  paper_trading: true
   
 agents:
   weights:
-    stanley_druckenmiller: 0.35
-    charlie_munger: 0.35
+    bill_ackman: 0.35
+    michael_burry: 0.35
     technical_analyst: 0.30
-
+  
 portfolio:
   max_position_size: 0.05  # Maximum 5% of portfolio in any single position
   max_risk_per_trade: 0.02  # Maximum 2% risk per trade
   max_sector_exposure: 0.25  # Maximum 25% exposure to any sector
   max_strategy_exposure: 0.40  # Maximum 40% exposure to any strategy type
 
-data:
-  cache_expiry_seconds: 86400  # Cache data for 24 hours
-  fallback_sources: ["yahoo_finance", "alpha_vantage"]
-
-tickers:
+default_tickers:
   - AAPL
   - MSFT
   - GOOGL
   - AMZN
-  - META 
+  - META
