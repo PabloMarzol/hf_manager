@@ -1,0 +1,30 @@
+# mixgo/config.yaml
+analysis:
+  default_lookback_days: 30
+  
+llm:
+  model: "gpt-4o"
+  provider: "OpenAI"
+  
+broker:
+  name: "alpaca"
+  paper_trading: true
+  
+agents:
+  weights:
+    bill_ackman: 0.35
+    michael_burry: 0.35
+    technical_analyst: 0.30
+  
+portfolio:
+  max_position_size: 0.05  # Maximum 5% of portfolio in any single position
+  max_risk_per_trade: 0.02  # Maximum 2% risk per trade
+  max_sector_exposure: 0.25  # Maximum 25% exposure to any sector
+  max_strategy_exposure: 0.40  # Maximum 40% exposure to any strategy type
+
+default_tickers:
+  - AAPL
+  - MSFT
+  - GOOGL
+  - AMZN
+  - META
