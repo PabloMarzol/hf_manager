@@ -1,4 +1,17 @@
+from typing import Optional
 from pydantic import BaseModel
+
+
+
+class OrderStatus(BaseModel):
+    """Order status model for broker API."""
+    order_id: str
+    ticker: str
+    direction: str
+    quantity: int
+    price: Optional[float] = None
+    status: str
+    timestamp: str
 
 
 class Price(BaseModel):

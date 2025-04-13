@@ -3,8 +3,8 @@ import alpaca_trade_api as tradeapi
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-from .base import Broker
-from data.models import OrderStatus, Position
+from signals.brokers.base import Broker
+from signals.data.models import Position, OrderStatus
 
 class AlpacaBroker(Broker):
     """Alpaca broker implementation."""

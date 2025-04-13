@@ -1,10 +1,11 @@
-# mixgo/main.py
+# mixgo/main.py - Updated to match your folder structure
 import asyncio
 import os
 import argparse
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+# Import from correct locations
 from trading_system.bill_ackman import BillAckmanAgent
 from trading_system.michael_burry import MichaelBurryAgent
 from trading_system.technical_analyst import TechnicalAnalystAgent
@@ -98,8 +99,8 @@ async def run_mixgo(args):
     
     # Create LLM client
     llm_client = LLMClient(
-        model_name=args.model or "gpt-4o",
-        model_provider=args.provider or "OpenAI"
+        model_name=args.model or "llama-3.1-70b-versatile",
+        model_provider=args.provider or "Groq"
     )
     
     # Create MixGo agent
@@ -152,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--mock", action="store_true", help="Use mock broker for testing")
     parser.add_argument("--dry-run", action="store_true", help="Don't execute trades, just analyze")
     parser.add_argument("--model", type=str, help="LLM model to use")
-    parser.add_argument("--provider", type=str, help="LLM provider (OpenAI or Anthropic)")
+    parser.add_argument("--provider", type=str, help="LLM provider (Groq, OpenAI, Anthropic)")
     
     args = parser.parse_args()
     

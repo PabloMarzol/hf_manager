@@ -1,0 +1,14 @@
+README.md
+setup.py
+mixgo.egg-info/PKG-INFO
+mixgo.egg-info/SOURCES.txt
+mixgo.egg-info/dependency_links.txt
+mixgo.egg-info/top_level.txt
+trading_system/__init__.py
+trading_system/bill_ackman.py
+trading_system/charlie_munger.py
+trading_system/michael_burry.py
+trading_system/mixgo.py
+trading_system/risk_manager.py
+trading_system/stanley_drucken.py
+trading_system/technical_analyst.py
